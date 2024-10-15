@@ -40,3 +40,12 @@ resource "aws_route" "public_route" {
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw.id
 }
+
+
+# Bastion Host Configuration
+resource "aws_instance" "bastion" {
+  ami           = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI
+  instance_type = "t2.micro"              # Free-tier eligible
+  key_name      = "bastion_key"           # SSH key for bastion host access
+  subnet_id     = aws_subnet.public_subnets[0].id
+}
