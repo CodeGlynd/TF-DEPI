@@ -1,0 +1,17 @@
+---
+- name: Deploy NGINX container on private instances
+  hosts: all
+  become: yes
+  tasks:
+    - name: Pull NGINX Docker image
+      docker_image:
+        name: nginx
+        source: pull
+
+    - name: Run NGINX container
+      docker_container:
+        name: nginx
+        image: nginx
+        state: started
+        ports:
+          - "80:80"
