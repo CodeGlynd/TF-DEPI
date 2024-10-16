@@ -1,1 +1,68 @@
 name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    name: Set up Infrastructure with Terraform
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: "us-east-1"
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.1.0
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+
+      - name: Save private IPs to JSON
+        run: terraform output -json private_instance_ips > inventory.json
+
+  ansible:
+    name: Configure Instances with Ansible
+    needs: terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+
+      - name: Install Ansible
+        run: sudo apt-get update && sudo apt-get install -y ansible
+
+      - name: Copy Inventory to Bastion Host
+        env:
+          BASTION_SSH_KEY: ${{ secrets.BASTION_SSH_KEY }}
+        run: |
+          echo "$BASTION_SSH_KEY" > bastion_key.pem
+          chmod 600 bastion_key.pem
+          scp -i bastion_key.pem inventory.json ubuntu@bastion-ip:/home/ubuntu/
+          rm bastion_key.pem
+
+      - name: Run Ansible Playbook (Docker)
+        run: |
+          ansible-playbook -i /home/ubuntu/inventory.json docker.yml
+
+  docker:
+    name: Deploy NGINX with Ansible
+    needs: ansible
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+
+      - name: Run NGINX Playbook
+        run: ansible-playbook -i /home/ubuntu/inventory.json nginx.yml
